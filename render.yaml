@@ -12,3 +12,7 @@ services:
         value: 0.0.0.0
       - key: MAGIRAN_ALLOWED_ORIGINS
         value: https://soheil-aghayani.github.io,http://127.0.0.1:5000,http://localhost:5000
+      # Optional administrator-owned HTTP(S) proxy. Never accept this value
+      # from a browser request or from an end user.
+      - key: MAGIRAN_EGRESS_PROXY
+        sync: false

@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener, urlopen
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
@@ -27,6 +27,7 @@ MAX_PAGES = 200
 PAGE_FETCH_WORKERS = 3
 PAGE_FETCH_TIMEOUT = 30
 USER_AGENT = "MagIranPlus/1.0 (local academic research utility)"
+EGRESS_PROXY_ENV = "MAGIRAN_EGRESS_PROXY"
 PERSIAN_FONT = "B Nazanin"
 ENGLISH_FONT = "Times New Roman"
 WORD_PERSIAN_SIZE = 14
@@ -37,6 +38,10 @@ _ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩"
 _DIGIT_TRANSLATION = str.maketrans(
     _PERSIAN_DIGITS + _ARABIC_DIGITS,
     _WESTERN_DIGITS + _WESTERN_DIGITS,
+)
+_PERSIAN_DIGIT_TRANSLATION = str.maketrans(
+    _WESTERN_DIGITS + _ARABIC_DIGITS,
+    _PERSIAN_DIGITS + _PERSIAN_DIGITS,
 )
 _URL_PATTERN = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 _PERSIAN_CHAR_PATTERN = re.compile(r"[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufeff]")
@@ -113,6 +118,29 @@ def decode_html(raw: bytes, content_type: str = "") -> str:
     return raw.decode(encoding, errors="replace")
 
 
+def configured_egress_proxy() -> str:
+    """Return the administrator-configured server egress proxy, if any.
+
+    This is intentionally an environment setting, never a request parameter.
+    User-provided V2Ray links must not become server-side proxy credentials.
+    """
+    return os.environ.get(EGRESS_PROXY_ENV, "").strip()
+
+
+def magiran_opener():
+    proxy_url = configured_egress_proxy()
+    if not proxy_url:
+        return None
+
+    parsed = urlparse(proxy_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise RuntimeError(
+            f"مقدار {EGRESS_PROXY_ENV} باید یک آدرس HTTP یا HTTPS معتبر باشد."
+        )
+
+    return build_opener(ProxyHandler({"http": proxy_url, "https": proxy_url}))
+
+
 def fetch_magiran_html(
     source_url: str,
     *,
@@ -126,7 +154,14 @@ def fetch_magiran_html(
         "Accept-Encoding": "identity",
     }
     try:
-        with urlopen(Request(source_url, headers=headers), timeout=timeout) as response:
+        request = Request(source_url, headers=headers)
+        opener = magiran_opener()
+        response_context = (
+            opener.open(request, timeout=timeout)
+            if opener
+            else urlopen(request, timeout=timeout)
+        )
+        with response_context as response:
             final_host = (urlparse(response.geturl()).hostname or "").lower()
             if final_host not in MAGIRAN_HOSTS:
                 raise RuntimeError("مگ‌ایران به یک مقصد ناشناس هدایت کرد.")
@@ -289,7 +324,11 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify({"ok": True, "service": "MagIranPlus"})
+    return jsonify({
+        "ok": True,
+        "service": "MagIranPlus",
+        "fetch_route": "configured-proxy" if configured_egress_proxy() else "direct",
+    })
 
 
 @app.post("/api/parse-search")
@@ -339,13 +378,66 @@ def parse_html():
     return jsonify(payload)
 
 
-def add_bidi(paragraph) -> None:
+def set_rtl_paragraph_properties(ppr) -> None:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    paragraph_format = paragraph._p.get_or_add_pPr()
-    if paragraph_format.find(qn("w:bidi")) is None:
-        paragraph_format.append(OxmlElement("w:bidi"))
+    for tag in ("w:bidi", "w:jc"):
+        for element in ppr.findall(qn(tag)):
+            ppr.remove(element)
+
+    # In an RTL paragraph, logical `start` is the visual right edge. Using
+    # the logical value avoids Word treating physical `right` as the wrong
+    # side when mixed Persian/Latin runs are present.
+    bidi = OxmlElement("w:bidi")
+    ppr.insert_element_before(
+        bidi,
+        "w:adjustRightInd", "w:snapToGrid", "w:spacing", "w:ind",
+        "w:contextualSpacing", "w:mirrorIndents", "w:suppressOverlap", "w:jc",
+        "w:textDirection", "w:textAlignment", "w:textboxTightWrap",
+        "w:outlineLvl", "w:divId", "w:cnfStyle", "w:rPr", "w:sectPr",
+        "w:pPrChange",
+    )
+    justification = OxmlElement("w:jc")
+    justification.set(qn("w:val"), "start")
+    ppr.insert_element_before(
+        justification,
+        "w:textDirection", "w:textAlignment", "w:textboxTightWrap",
+        "w:outlineLvl", "w:divId", "w:cnfStyle", "w:rPr", "w:sectPr",
+        "w:pPrChange",
+    )
+
+
+def add_bidi(paragraph) -> None:
+    set_rtl_paragraph_properties(paragraph._p.get_or_add_pPr())
+
+
+def set_document_rtl_defaults(document) -> None:
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    styles = document.styles.element
+    doc_defaults = styles.find(qn("w:docDefaults"))
+    if doc_defaults is None:
+        doc_defaults = OxmlElement("w:docDefaults")
+        styles.insert(0, doc_defaults)
+    paragraph_defaults = doc_defaults.find(qn("w:pPrDefault"))
+    if paragraph_defaults is None:
+        paragraph_defaults = OxmlElement("w:pPrDefault")
+        doc_defaults.append(paragraph_defaults)
+    default_ppr = paragraph_defaults.find(qn("w:pPr"))
+    if default_ppr is None:
+        default_ppr = OxmlElement("w:pPr")
+        paragraph_defaults.append(default_ppr)
+    set_rtl_paragraph_properties(default_ppr)
+
+    normal = document.styles["Normal"]
+    set_rtl_paragraph_properties(normal._element.get_or_add_pPr())
+
+    section_ppr = document.sections[0]._sectPr
+    section_bidi = section_ppr.find(qn("w:bidi"))
+    if section_bidi is None:
+        section_ppr.insert(0, OxmlElement("w:bidi"))
 
 
 def _script_chunks(value: str):
@@ -371,7 +463,9 @@ def _script_chunks(value: str):
         if _PERSIAN_CHAR_PATTERN.search(character):
             detected_script = "fa"
         elif _LATIN_CHAR_PATTERN.search(character) or character in _WESTERN_DIGITS:
-            detected_script = "en"
+            detected_script = "en" if character not in _WESTERN_DIGITS else current_script
+        elif character in _PERSIAN_DIGITS or character in _ARABIC_DIGITS:
+            detected_script = current_script
         else:
             detected_script = current_script
 
@@ -388,19 +482,21 @@ def _script_chunks(value: str):
 
 
 def word_text_chunks(value: object):
-    text = str(value if value is not None else "").translate(_DIGIT_TRANSLATION)
+    text = str(value if value is not None else "")
     cursor = 0
     for match in _URL_PATTERN.finditer(text):
         before = text[cursor:match.start()]
         if before:
             for chunk, script in _script_chunks(before):
-                yield chunk, script, False
-        yield match.group(0), "en", True
+                translation = _PERSIAN_DIGIT_TRANSLATION if script == "fa" else _DIGIT_TRANSLATION
+                yield chunk.translate(translation), script, False
+        yield match.group(0).translate(_DIGIT_TRANSLATION), "en", True
         cursor = match.end()
     remainder = text[cursor:]
     if remainder:
         for chunk, script in _script_chunks(remainder):
-            yield chunk, script, False
+            translation = _PERSIAN_DIGIT_TRANSLATION if script == "fa" else _DIGIT_TRANSLATION
+            yield chunk.translate(translation), script, False
 
 
 def set_run_font(run, size: float | None = None, bold: bool | None = None, font_name: str = PERSIAN_FONT, rtl: bool = True) -> None:
@@ -447,12 +543,12 @@ def add_word_text(paragraph, value: object, size: float = WORD_PERSIAN_SIZE, bol
 
 def build_docx(payload: dict[str, object]) -> io.BytesIO:
     from docx import Document
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     from docx.shared import Inches, Pt
 
     document = Document()
+    set_document_rtl_defaults(document)
     section = document.sections[0]
     section.top_margin = Inches(0.65)
     section.bottom_margin = Inches(0.65)
@@ -462,7 +558,6 @@ def build_docx(payload: dict[str, object]) -> io.BytesIO:
     normal = document.styles["Normal"]
     normal.font.name = PERSIAN_FONT
     normal.font.size = Pt(WORD_PERSIAN_SIZE)
-    normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     normal_rpr = normal._element.get_or_add_rPr()
     normal_rfonts = normal_rpr.rFonts
     if normal_rfonts is None:
@@ -487,7 +582,6 @@ def build_docx(payload: dict[str, object]) -> io.BytesIO:
 
     def paragraph_with_text(text: object, bold: bool = False):
         paragraph = document.add_paragraph()
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         add_bidi(paragraph)
         add_word_text(paragraph, text, size=WORD_PERSIAN_SIZE, bold=bold)
         return paragraph
@@ -495,7 +589,6 @@ def build_docx(payload: dict[str, object]) -> io.BytesIO:
     paragraph_with_text("فهرست منابع مگ‌ایران", bold=True)
     paragraph_with_text(query_name, bold=True)
     info = document.add_paragraph()
-    info.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     add_bidi(info)
     add_word_text(info, "تعداد مقالات انتخاب‌شده: ", bold=True)
     add_word_text(info, len(articles))
@@ -515,7 +608,6 @@ def build_docx(payload: dict[str, object]) -> io.BytesIO:
 
     for citation in citations:
         paragraph = document.add_paragraph()
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         paragraph.paragraph_format.space_after = Pt(7)
         add_bidi(paragraph)
         add_word_text(paragraph, citation)

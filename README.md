@@ -1,94 +1,168 @@
+<div align="center">
+
+<img src="web/assets/magiranplus-logo.webp" alt="MagIranPlus logo" width="128">
+
+# MagIranPlus
+
+### Extract, curate, and export Magiran publications.
+
+[![Live site](https://img.shields.io/badge/Live_site-MagIran%2B-1E3A5F?style=for-the-badge)](https://soheil-aghayani.github.io/MagIranPlus/)
+[![Architecture](https://img.shields.io/badge/Architecture-Static_UI_%7C_Flask_API-0F172A?style=for-the-badge)](#architecture)
+[![Deployment](https://img.shields.io/badge/Hosting-GitHub_Pages_%7C_Render_%7C_Cloudflare-2563EB?style=for-the-badge&logo=cloudflare&logoColor=white)](#deployment)
+[![License](https://img.shields.io/badge/License-MIT-0F172A?style=for-the-badge)](LICENSE)
+
+<br>
+
 <p align="center">
-  <img src="web/assets/magiranplus-logo.webp" alt="MagIranPlus logo" width="112">
+  A focused Persian academic utility for turning public Magiran search results into a searchable publication list and a ready-to-use bibliography.
 </p>
 
-<h1 align="center">MagIranPlus</h1>
+</div>
 
-<p align="center">
-  Persian Magiran search extraction, citation formatting, and Word export.
-</p>
-
-<p align="center">
-  <a href="https://github.com/Soheil-Aghayani/MagIranPlus">Repository</a>
-  ·
-  <a href="https://soheil-aghayani.github.io/MagIranPlus/">GitHub Pages</a>
-</p>
+---
 
 ## Overview
 
-MagIranPlus is a local-first Persian research utility for collecting article records from public Magiran search result pages. It keeps the interface empty until a real Magiran search URL is provided, loads all result pages with bounded concurrency, removes duplicates, and presents the records in a paginated workspace.
+MagIranPlus is a free, open-source research utility for working with public [Magiran](https://www.magiran.com) search results. Paste a Magiran search URL, review the extracted records, select the articles you need, and export a bibliography in the citation style required by your workflow.
 
-The interface is Persian and RTL. The codebase is intentionally separate from CivilicaPlus so each source can evolve without sharing source-specific assumptions.
+The interface is Persian and right-to-left, while the implementation and documentation are kept in English for easier collaboration. The project is intentionally separate from [CivilicaPulse](https://github.com/Soheil-Aghayani/CivilicaPulse) so each source can evolve with its own parser and metadata rules.
+
+## Live links
+
+- **Website:** [soheil-aghayani.github.io/MagIranPlus](https://soheil-aghayani.github.io/MagIranPlus/)
+- **API health:** [magiranplus-api.onrender.com/api/health](https://magiranplus-api.onrender.com/api/health)
+- **Related project:** [CivilicaPulse](https://soheil-aghayani.github.io/CivilicaPulse/)
+- **Related project:** [ScholarPulse](https://soheil-aghayani.github.io/ScholarPulse/)
+- **Author:** [Soheil Aghayani](https://github.com/Soheil-Aghayani)
 
 ## Features
 
-- Extract Magiran search results from a `searchinpapers` URL.
-- Fetch all result pages and report failed pages explicitly.
-- Preserve article titles, Persian and English author metadata, journal details, year, volume, issue, pages, language, abstracts, and source links.
-- Filter by article type, author, and free-text search.
-- Select all filtered results or individual articles.
-- Keep all co-authors by default and optionally isolate a target author.
-- Format APA 7th, Vancouver, IEEE, Harvard, Chicago, MLA 9th, and BibTeX.
+- Extract article records from a public Magiran `searchinpapers` URL.
+- Discover the full result count even when Magiran shows only a sliding window of page links.
+- Fetch all result pages with bounded concurrency and remove duplicate records.
+- Report failed pages explicitly instead of presenting an incomplete result as complete.
+- Preserve titles, all available authors, journal details, year, volume, issue, pages, language, abstracts, and article links when available.
+- Keep the interface empty on first load; no sample author, article, or fabricated result is included.
+- Filter by publication type, author, and free-text search.
+- Select all filtered results or select individual articles.
+- Preserve every co-author by default, with an optional target-author isolation control.
+- Format references as APA 7th, Vancouver, IEEE, Harvard, Chicago, MLA 9th, or BibTeX.
 - Export Word `.docx`, BibTeX, JSON, and CSV files, or copy and print citations.
-- Generate Word files with B Nazanin 14 for Persian text and Times New Roman 13 for Latin text and English digits.
+- Generate RTL Word documents with B Nazanin 14 for Persian text and Times New Roman 13 for Latin text.
+- Preserve English digits in Word output and keep URLs in their original Latin form.
 - Accept pasted or dropped Magiran HTML when direct fetching is unavailable.
-- Validate source URLs against Magiran's approved hosts before fetching.
+- Validate source URLs against `magiran.com` and `www.magiran.com` before server-side fetching.
 
-## Local setup
+## Architecture
 
-Requirements: Python 3.12 or newer.
+| Layer | Responsibility | Technology |
+| :--- | :--- | :--- |
+| Static frontend | URL input, filters, author controls, pagination, views, and exports | Semantic HTML, vanilla JavaScript, and CSS |
+| Parser and API | Magiran page parsing, pagination, validation, and response handling | Python and Flask |
+| Citation engine | Citation-style normalization and BibTeX formatting | `citation_formats.py` |
+| Word generator | RTL paragraphs, script-aware fonts, digit handling, and `.docx` output | `python-docx` |
+| Public hosting | Static application and optional browser-safe API routing | GitHub Pages, Render, and Cloudflare |
 
-```powershell
-py -m venv .venv
-\.venv\Scripts\python.exe -m pip install -r requirements.txt
-\.venv\Scripts\python.exe server.py
-```
+### Request flow
 
-Open <http://127.0.0.1:5000/> and paste a public Magiran search URL, for example:
-
-<https://www.magiran.com/searchinpapers?adv=false&ew=ناصر%20مهردادی&cols=4&s=2>
-
-The included `start.bat` performs the same setup and starts the local server on Windows.
-
-## API
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/health` | Check service health |
-| `POST` | `/api/parse-search` | Fetch and parse a Magiran search URL |
-| `POST` | `/api/parse-html` | Parse pasted or uploaded Magiran HTML |
-| `POST` | `/api/export-word` | Generate a Persian RTL Word document |
-| `POST` | `/api/export-docx` | Compatibility alias for Word export |
-
-The local frontend uses the same-origin Flask server on localhost. When the public GitHub Pages build is opened from Iran, it first tries a local API at `http://127.0.0.1:5000` so Magiran requests leave through the user's Iranian connection; the user can start it with `start.bat`. If the local service is not running, the frontend falls back to the separately deployed Render API at `https://magiranplus-api.onrender.com`. The free Render instance can take a little longer to answer after inactivity, and Magiran may restrict non-Iranian server traffic. The Cloudflare Worker configuration is kept as an optional bridge for a future deployment.
+1. The frontend sends a public Magiran search URL to the Flask API.
+2. The API validates the domain and extracts the first result page.
+3. The API calculates the real page count from the total result count and page size, then fetches the remaining pages with bounded concurrency.
+4. Records are merged by article identifier and returned with page status information.
+5. The frontend provides search, filters, pagination, author controls, and citation exports from the same dataset.
 
 ## Word export rules
 
-- Persian text uses B Nazanin at 14 pt.
-- Latin text and English digits use Times New Roman at 13 pt.
-- Paragraphs are RTL and right-aligned.
-- Magiran links can be included or omitted from the generated document.
-- The default citation output retains every parsed co-author.
+| Property | Behavior |
+| :--- | :--- |
+| Direction | Right-to-left paragraphs with right alignment |
+| Persian text | `B Nazanin`, 14 pt |
+| English and Latin text | `Times New Roman`, 13 pt |
+| Numerals | Persian digits in Persian text; English digits remain in citation styles and URLs |
+| Output | Native `.docx` generated with `python-docx` |
+| Links | Magiran links can be included or omitted |
+| Authors | All parsed co-authors are retained unless author isolation is enabled |
 
-## Project structure
+## API
+
+| Method | Route | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | Service health check |
+| `POST` | `/api/parse-search` | Fetch and parse a Magiran search URL |
+| `POST` | `/api/parse-html` | Parse pasted or uploaded Magiran HTML |
+| `POST` | `/api/export-word` | Generate a Persian RTL `.docx` bibliography |
+| `POST` | `/api/export-docx` | Compatibility alias for Word export |
+
+The search endpoint returns the normalized query, total count, fetched page count, per-page status, completeness state, and article records. The Word endpoint receives the selected records from the shared frontend dataset.
+
+## Repository structure
 
 ```text
 MagIranPlus/
+├── web/                    # Static Persian RTL frontend and GitHub Pages target
+│   ├── assets/             # Logo, fonts, icons, and local vendor assets
+│   ├── app.js              # UI state, filters, pagination, and exports
+│   ├── config.js           # Local and public API selection
+│   ├── index.html          # Accessible RTL application shell
+│   └── styles.css          # Theme, responsive layout, and components
+├── cloudflare/             # Optional Cloudflare Worker API bridge
+├── docs/                   # Deployment notes and project documentation
+├── tests/                  # Parser, API, citation, and Word regression tests
+├── citation_formats.py     # Citation-style formatters
 ├── magiran_parser.py       # Magiran result-page and pagination parser
-├── citation_formats.py     # Citation-style and BibTeX formatting
-├── server.py               # Flask API and Word export
-├── web/
-│   ├── index.html          # Persian RTL application shell
-│   ├── app.js              # State, filters, pagination, and exports
-│   ├── styles.css          # Responsive light/dark interface
-│   └── assets/             # Logo, fonts, icons, and local vendor assets
-└── tests/                  # Parser, API, citation, and Word tests
+├── server.py               # Flask API and Word document generator
+├── render.yaml             # Render service definition
+├── requirements.txt        # Python dependencies
+└── start.bat               # Windows local-development launcher
 ```
 
-## Notes
+## Local development
 
-MagIranPlus reads publicly accessible result pages. It does not bypass authentication, solve challenges, or fabricate missing metadata. If Magiran blocks a server request, use the HTML import tab or run the extractor locally.
+### Windows launcher
+
+Double-click [`start.bat`](start.bat) to create or reuse the virtual environment, install dependencies, and start the local server.
+
+### PowerShell
+
+```powershell
+# From the repository root
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python server.py
+```
+
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
+
+### Tests
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+## Deployment
+
+- **Frontend:** GitHub Pages serves the static files from [`web/`](web/).
+- **API:** The Flask service is defined in [`render.yaml`](render.yaml).
+- **Optional bridge:** The Cloudflare Worker in [`cloudflare/`](cloudflare/) can route browser requests to the API.
+- **Local fallback:** `start.bat` remains the simplest development path and does not replace the public API.
+
+For reliable public extraction, the API origin must be able to reach Magiran from the Iranian network. See [`docs/public-api-deployment.md`](docs/public-api-deployment.md) for the no-install deployment contract and the administrator-controlled egress route.
+
+## Notes and limitations
+
+MagIranPlus reads publicly accessible search-result pages. It does not bypass authentication, solve anti-bot challenges, or fabricate missing metadata. Some Magiran records may not expose a full-text URL; those records are retained with an empty article-link field.
+
+The public no-install mode requires an administrator-controlled API origin. End-user V2Ray links are intentionally not accepted or uploaded. If direct fetching is unavailable, use the HTML import tab or run the extractor locally.
 
 ## License
 
-MagIranPlus is released under the MIT License. See [`LICENSE`](LICENSE).
+MagIranPlus is released under the MIT License. See [`LICENSE`](LICENSE) for the full text.
+
+## Credits
+
+Designed and developed by [Soheil Aghayani](https://github.com/Soheil-Aghayani), an environmental engineering researcher building focused tools for Persian academic and technical workflows.
+
+<div align="center">
+  <sub>Built for practical Persian academic research workflows.</sub>
+</div>

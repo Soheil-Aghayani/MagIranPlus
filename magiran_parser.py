@@ -130,7 +130,14 @@ class MagiranSearchParser(HTMLParser):
             in_en = self.in_en_depth is not None
             if tag == "a" and "mi-fulltext" in classes and (in_fa or in_en):
                 field = "title_en" if in_en and not in_fa else "title"
-                self._begin_capture(field, tag, attr_map.get("href") or "")
+                if self.capture is not None and self.capture.get("field") == field:
+                    self.capture["value"] = attr_map.get("href") or ""
+                else:
+                    self._begin_capture(field, tag, attr_map.get("href") or "")
+            elif tag == "span" and "title" in classes and in_fa and not self.current.get("title"):
+                # Some Magiran records have no full-text link, but still expose
+                # their title in a plain span. Keep the record instead of dropping it.
+                self._begin_capture("title", tag)
             elif tag == "span" and "p-author" in classes and (in_fa or in_en):
                 field = "authors_en" if in_en and not in_fa else "authors"
                 self._begin_capture(field, tag)
@@ -252,7 +259,7 @@ class MagiranSearchParser(HTMLParser):
             "language": language_match.group(1) if language_match else "",
             "abstract": normalize_text(article.get("abstract"))[:12000],
             "type": "مقاله ژورنالی",
-            "url": absolute_url(raw_href, self.source_url),
+            "url": absolute_url(raw_href, self.source_url) if raw_href else "",
         }
         if "همایش" in result["venue"] or "کنفرانس" in result["venue"]:
             result["type"] = "مقاله کنفرانسی"
@@ -264,12 +271,19 @@ class MagiranSearchParser(HTMLParser):
         total_count = int(result_match.group(1)) if result_match else len(self.articles)
         if self.current_page not in self.pagination:
             self.pagination[self.current_page] = self.source_url
+        page_count = max(self.pagination.keys(), default=self.current_page)
+        page_size = len(self.articles)
+        if self.current_page == 1 and page_size and total_count > page_size:
+            # Magiran shows a sliding window of numeric page links (often 1..5),
+            # so the last visible link is not necessarily the last result page.
+            inferred_page_count = (total_count + page_size - 1) // page_size
+            page_count = max(page_count, inferred_page_count)
         return {
             "source_url": self.source_url,
             "query": parse_qs(urlparse(self.source_url).query).get("ew", [""])[0],
             "page": self.current_page,
             "total_count": total_count,
-            "page_count": max(self.pagination.keys(), default=self.current_page),
+            "page_count": page_count,
             "pagination": [
                 {"page": page, "url": url}
                 for page, url in sorted(self.pagination.items())

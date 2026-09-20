@@ -1,3 +1,4 @@
+import os
 import unittest
 from io import BytesIO
 from unittest.mock import patch
@@ -53,8 +54,18 @@ class ApiTests(unittest.TestCase):
             headers={"Origin": "https://soheil-aghayani.github.io"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"ok": True, "service": "MagIranPlus"})
+        self.assertEqual(
+            response.get_json(),
+            {"ok": True, "service": "MagIranPlus", "fetch_route": "direct"},
+        )
         self.assertEqual(response.headers["Access-Control-Allow-Origin"], "https://soheil-aghayani.github.io")
+
+    @patch.dict(os.environ, {"MAGIRAN_EGRESS_PROXY": "https://proxy.example.test:8443"})
+    def test_health_reports_administrator_proxy_without_exposing_it(self):
+        response = self.client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["fetch_route"], "configured-proxy")
+        self.assertNotIn("proxy.example.test", response.get_data(as_text=True))
 
     def test_pasted_single_page_is_explicitly_incomplete(self):
         response = self.client.post(
@@ -109,7 +120,7 @@ class WordExportTests(unittest.TestCase):
             "style": "apa7",
         }
 
-    def test_docx_uses_b_nazanin_14_tnr_13_rtl_and_english_digits(self):
+    def test_docx_uses_b_nazanin_14_tnr_13_rtl_and_persian_text_digits(self):
         response = self.client.post("/api/export-word", json={**self.payload, "file_type": "docx"})
 
         self.assertEqual(response.status_code, 200)
@@ -119,13 +130,14 @@ class WordExportTests(unittest.TestCase):
         )
         document = Document(BytesIO(response.data))
         citation = document.paragraphs[-1]
-        self.assertIn("1402", citation.text)
-        self.assertNotIn("۱۴۰۲", citation.text)
+        self.assertIn("۱۴۰۲", citation.text)
+        self.assertNotIn("1402", citation.text)
         self.assertIn("B Nazanin", {run.font.name for run in citation.runs})
         self.assertIn("Times New Roman", {run.font.name for run in citation.runs})
         self.assertIn(14.0, {run.font.size.pt for run in citation.runs if run.font.size})
         self.assertIn(13.0, {run.font.size.pt for run in citation.runs if run.font.size})
-        self.assertTrue(all('w:val="right"' in paragraph._p.xml for paragraph in document.paragraphs))
+        self.assertTrue(all('w:val="start"' in paragraph._p.xml for paragraph in document.paragraphs))
+        self.assertTrue(all("w:bidi" in paragraph._p.xml for paragraph in document.paragraphs))
 
     def test_docx_can_omit_magiran_links(self):
         response = self.client.post(

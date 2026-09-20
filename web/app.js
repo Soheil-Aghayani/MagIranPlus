@@ -32,14 +32,17 @@
 
   var apiBaseUrl = String(window.MAGIRAN_API_BASE_URL || "").replace(/\/+$/, "");
   var localApiBaseUrl = String(window.MAGIRAN_LOCAL_API_BASE_URL || "http://127.0.0.1:5000").replace(/\/+$/, "");
+  var preferLocalApi = window.MAGIRAN_PREFER_LOCAL_API === true;
   var isLocalHost = ["127.0.0.1", "localhost"].indexOf(window.location.hostname) >= 0;
   var activeApiBaseUrl = apiBaseUrl;
   var backendRequestTimeout = 180000;
 
   function apiCandidates() {
     if (isLocalHost) return [activeApiBaseUrl];
-    var candidates = [];
-    if (localApiBaseUrl) candidates.push(localApiBaseUrl);
+    var candidates = preferLocalApi ? [] : [activeApiBaseUrl];
+    if (preferLocalApi && localApiBaseUrl) candidates.push(localApiBaseUrl);
+    if (!preferLocalApi && localApiBaseUrl) candidates.push(localApiBaseUrl);
+    if (preferLocalApi && activeApiBaseUrl && candidates.indexOf(activeApiBaseUrl) < 0) candidates.push(activeApiBaseUrl);
     if (activeApiBaseUrl && candidates.indexOf(activeApiBaseUrl) < 0) candidates.push(activeApiBaseUrl);
     return candidates;
   }
@@ -208,7 +211,11 @@
 
   function userFacingError(error, fallback) {
     if (error && error.name === "AbortError") return "پاسخ مگ‌ایران دیر رسید؛ دوباره تلاش کنید یا HTML صفحه را وارد کنید.";
-    if (error && error.name === "TypeError") return "اتصال به سرویس برقرار نشد؛ سرور محلی را اجرا کنید یا حالت HTML را امتحان کنید.";
+    if (error && error.name === "TypeError") {
+      return isLocalHost
+        ? "اتصال به مگ‌ایران برقرار نشد؛ دوباره تلاش کنید یا حالت HTML را امتحان کنید."
+        : "سرویس عمومی استخراج در دسترس نیست؛ دوباره تلاش کنید یا حالت HTML را امتحان کنید.";
+    }
     return error && error.message ? error.message : fallback;
   }
 

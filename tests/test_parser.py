@@ -68,6 +68,53 @@ class MagiranParserTests(unittest.TestCase):
         self.assertIn("چکیدهٔ مقالهٔ اول", article["abstract"])
         self.assertEqual(article["url"], "https://www.magiran.com/paper/101/article-one")
 
+    def test_infers_hidden_pages_from_total_count_and_page_size(self):
+        pagination = "".join(
+            f'<a class="page-link" href="/searchinpapers?page={page}">{page}</a>'
+            for page in range(1, 6)
+        )
+        articles = "".join(
+            f'''<li class="paper-list fa-number">
+                <div class="p-info fa-paper flex-fill" id="fa_{page}">
+                    <a class="mi-fulltext" href="/paper/{page}">مقالهٔ {page}</a>
+                    <span class="p-author">نویسندهٔ آزمون</span>
+                    <span class="p-info-part mt-2">نشریهٔ آزمون، سال اول شمارهٔ ۱</span>
+                    <span class="p-info-part">صص ۱ - ۱۰</span>
+                </div>
+            </li>'''
+            for page in range(1, 11)
+        )
+        html = f'''<html><body>
+            <div>ردیف ۱-۱۰ از ۱۰۶ عنوان مطلب</div>
+            <div class="pagination-container">{pagination}</div>
+            {articles}
+        </body></html>'''
+
+        result = parse_search_html(html, SOURCE_URL)
+
+        self.assertEqual(result["total_count"], 106)
+        self.assertEqual(len(result["articles"]), 10)
+        self.assertEqual(result["page_count"], 11)
+
+    def test_keeps_records_without_full_text_links(self):
+        html = """<html><body>
+            <div>ردیف ۱-۱ از ۱ عنوان مطلب</div>
+            <li class="paper-list fa-number">
+                <div class="p-info fa-paper flex-fill" id="fa_900">
+                    <div class="p-title"><span class="title">عنوان بدون پیوند</span></div>
+                    <span class="p-author">نویسندهٔ آزمون</span>
+                    <span class="p-info-part mt-2">نشریهٔ آزمون، سال اول شمارهٔ ۱</span>
+                    <span class="p-info-part">ص ۱</span>
+                </div>
+            </li>
+        </body></html>"""
+
+        result = parse_search_html(html, SOURCE_URL)
+
+        self.assertEqual(len(result["articles"]), 1)
+        self.assertEqual(result["articles"][0]["title"], "عنوان بدون پیوند")
+        self.assertEqual(result["articles"][0]["url"], "")
+
     def test_merge_articles_deduplicates_by_identifier_and_preserves_order(self):
         pages = [
             {"articles": [{"id": "1", "title": "اول"}, {"id": "2", "title": "دوم"}]},
