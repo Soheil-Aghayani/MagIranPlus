@@ -48,9 +48,13 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_health_identifies_magiranplus_service(self):
-        response = self.client.get("/api/health")
+        response = self.client.get(
+            "/api/health",
+            headers={"Origin": "https://soheil-aghayani.github.io"},
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"ok": True, "service": "MagIranPlus"})
+        self.assertEqual(response.headers["Access-Control-Allow-Origin"], "https://soheil-aghayani.github.io")
 
     def test_pasted_single_page_is_explicitly_incomplete(self):
         response = self.client.post(

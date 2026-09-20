@@ -49,7 +49,11 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_HTML_BYTES + 256 * 1024
 def allowed_origins() -> set[str]:
     configured = os.environ.get("MAGIRAN_ALLOWED_ORIGINS", "")
     origins = {origin.strip() for origin in configured.split(",") if origin.strip()}
-    origins.update({"http://127.0.0.1:5000", "http://localhost:5000"})
+    origins.update({
+        "https://soheil-aghayani.github.io",
+        "http://127.0.0.1:5000",
+        "http://localhost:5000",
+    })
     return origins
 
 

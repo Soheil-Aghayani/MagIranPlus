@@ -31,10 +31,17 @@
   };
 
   var apiBaseUrl = String(window.MAGIRAN_API_BASE_URL || "").replace(/\/+$/, "");
+  var localApiBaseUrl = String(window.MAGIRAN_LOCAL_API_BASE_URL || "http://127.0.0.1:5000").replace(/\/+$/, "");
+  var isLocalHost = ["127.0.0.1", "localhost"].indexOf(window.location.hostname) >= 0;
+  var activeApiBaseUrl = apiBaseUrl;
   var backendRequestTimeout = 180000;
 
-  function apiUrl(path) {
-    return apiBaseUrl + path;
+  function apiCandidates() {
+    if (isLocalHost) return [activeApiBaseUrl];
+    var candidates = [];
+    if (localApiBaseUrl) candidates.push(localApiBaseUrl);
+    if (activeApiBaseUrl && candidates.indexOf(activeApiBaseUrl) < 0) candidates.push(activeApiBaseUrl);
+    return candidates;
   }
 
   function fetchWithTimeout(url, options, timeoutMs) {
@@ -205,14 +212,35 @@
     return error && error.message ? error.message : fallback;
   }
 
+  async function requestApi(path, options, timeoutMs) {
+    var firstError = null;
+    var candidates = apiCandidates();
+    for (var index = 0; index < candidates.length; index += 1) {
+      var base = candidates[index];
+      try {
+        var response = await fetchWithTimeout(base + path, options, timeoutMs);
+        if (response.ok) {
+          activeApiBaseUrl = base;
+          return response;
+        }
+        var payload = await response.clone().json().catch(function () { return {}; });
+        var apiError = new Error(payload.error || "درخواست سرویس مگ‌ایران انجام نشد.");
+        apiError.status = response.status;
+        if (!firstError) firstError = apiError;
+      } catch (error) {
+        if (!firstError) firstError = error;
+      }
+    }
+    throw firstError || new Error("سرویس مگ‌ایران در دسترس نیست.");
+  }
+
   async function requestSearch(sourceUrl) {
-    var response = await fetchWithTimeout(apiUrl("/api/parse-search"), {
+    var response = await requestApi("/api/parse-search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: sourceUrl, fetch_all: true })
     }, backendRequestTimeout);
     var payload = await response.json().catch(function () { return {}; });
-    if (!response.ok) throw new Error(payload.error || "استخراج نتایج مگ‌ایران انجام نشد.");
     return payload;
   }
 
@@ -525,7 +553,7 @@
     setWordExportState(true, "ساخت Word…");
     try {
       var includeLinks = document.getElementById("include-links");
-      var response = await fetchWithTimeout(apiUrl("/api/export-word"), {
+      var response = await requestApi("/api/export-word", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -537,10 +565,6 @@
           isolate_author: state.isolateTargetAuthor
         })
       }, backendRequestTimeout);
-      if (!response.ok) {
-        var errorPayload = await response.json().catch(function () { return {}; });
-        throw new Error(errorPayload.error || "ساخت فایل Word انجام نشد.");
-      }
       var blob = await response.blob();
       var disposition = response.headers.get("Content-Disposition") || "";
       var filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
@@ -771,13 +795,12 @@
       if (!html) return showToast("ابتدا HTML را وارد کنید.");
       parseButton.disabled = true;
       try {
-        var response = await fetch(apiUrl("/api/parse-html"), {
+        var response = await requestApi("/api/parse-html", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ html: html, source_url: document.getElementById("profile-url").value.trim() })
         });
         var payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || "پردازش HTML انجام نشد.");
         if (!loadDataset(payload)) throw new Error("مقاله‌ای در HTML پیدا نشد.");
         showToast(toPersianDigits(payload.count || payload.articles.length) + " مقاله آماده شد.");
       } catch (error) {
