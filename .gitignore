@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.pytest_cache/
+.wrangler/
+.idea/
+.vscode/
+*.log
+
+# Unused scaffold assets are intentionally not part of this repo.
+web/assets/civilicapulse-*.webp
+web/favicon.svg
