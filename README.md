@@ -60,7 +60,7 @@ The included `start.bat` performs the same setup and starts the local server on 
 | `POST` | `/api/export-word` | Generate a Persian RTL Word document |
 | `POST` | `/api/export-docx` | Compatibility alias for Word export |
 
-The application does not include a public API endpoint by default. The frontend uses the local Flask server when opened on localhost. The Render and Cloudflare configuration files are namespaced for a future MagIranPlus deployment, but no external service is provisioned by this repository yet.
+The local frontend uses the same-origin Flask server on localhost. The public GitHub Pages build uses the separately deployed Render API at `https://magiranplus-api.onrender.com`; the free Render instance can take a little longer to answer after inactivity. The Cloudflare Worker configuration is kept as an optional bridge for a future deployment.
 
 ## Word export rules
 
