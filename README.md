@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/assets/magiranplus-logo.webp" alt="MagIranPlus logo" width="128">
+<img src="docs/readme-hero.svg" alt="MagIranPlus visual hero" width="100%">
 
 # MagIranPlus
 
