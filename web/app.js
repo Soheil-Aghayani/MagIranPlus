@@ -802,14 +802,56 @@
     }
   }
 
-  function checkBookmarkletImport() {
-    var stored = localStorage.getItem("magiran_import_html");
-    if (!stored) return;
-    localStorage.removeItem("magiran_import_html");
+  function handleBookmarkletHtml(html, sourceUrl) {
     var textarea = document.getElementById("raw-html");
-    if (textarea) textarea.value = stored;
+    if (!textarea || !html) return;
+    textarea.value = html;
+    var input = document.getElementById("profile-url");
+    if (input && sourceUrl) input.value = sourceUrl;
+    var htmlTab = document.getElementById("tab-btn-html");
+    if (htmlTab) htmlTab.click();
     var parseButton = document.getElementById("parse-html-btn");
     if (parseButton) parseButton.click();
+  }
+
+  function initBookmarklet() {
+    var link = document.getElementById("bookmarklet-link");
+    if (!link) return;
+    var targetUrl = new URL(window.location.href);
+    targetUrl.search = "";
+    targetUrl.hash = "";
+    var targetPage = targetUrl.toString();
+    var targetOrigin = targetUrl.origin;
+    var script = "(function(){" +
+      "var target=" + JSON.stringify(targetPage + "?bookmarklet=1") + ";" +
+      "var origin=" + JSON.stringify(targetOrigin) + ";" +
+      "var html=document.documentElement.outerHTML;" +
+      "var sourceUrl=location.href;" +
+      "var targetWindow=window.open(target,'_blank');" +
+      "if(!targetWindow){alert('ابتدا اجازهٔ بازشدن پنجرهٔ جدید را فعال کنید.');return;}" +
+      "var attempts=0;var timer=setInterval(function(){" +
+      "try{targetWindow.postMessage({type:'magiranplus-html',html:html,sourceUrl:sourceUrl},origin);}" +
+      "catch(error){}" +
+      "attempts++;if(attempts>30)clearInterval(timer);" +
+      "},500);" +
+      "})();";
+    link.href = "javascript:" + script;
+  }
+
+  function checkBookmarkletImport() {
+    window.addEventListener("message", function (event) {
+      if (!event.data || event.data.type !== "magiranplus-html") return;
+      if (event.origin !== "https://magiran.com" && event.origin !== "https://www.magiran.com") return;
+      handleBookmarkletHtml(String(event.data.html || ""), String(event.data.sourceUrl || ""));
+    });
+    try {
+      var stored = localStorage.getItem("magiran_import_html");
+      if (!stored) return;
+      localStorage.removeItem("magiran_import_html");
+      handleBookmarkletHtml(stored, "");
+    } catch (_error) {
+      // Private browsing may disable localStorage; postMessage remains available.
+    }
   }
 
   function normalizeInputUrl(value) {
@@ -861,6 +903,7 @@
     initActions();
     initHtmlImport();
     initForm();
+    initBookmarklet();
     checkBookmarkletImport();
   });
 })();
