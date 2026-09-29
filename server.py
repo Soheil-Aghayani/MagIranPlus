@@ -46,6 +46,7 @@ _PERSIAN_DIGIT_TRANSLATION = str.maketrans(
 _URL_PATTERN = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 _PERSIAN_CHAR_PATTERN = re.compile(r"[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufeff]")
 _LATIN_CHAR_PATTERN = re.compile(r"[A-Za-z]")
+_AUTHOR_PROFILE_PATH_PATTERN = re.compile(r"^/author/(?P<author_id>\d+)(?:/[^/]+)?/?$", re.IGNORECASE)
 
 app = Flask(__name__, static_folder=str(WEB_DIR), static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = MAX_HTML_BYTES + 256 * 1024
@@ -91,17 +92,34 @@ def boolean_value(value: object, default: bool = True) -> bool:
     return default if not normalized else normalized not in {"0", "false", "no", "off"}
 
 
+def source_kind_and_id(path: str) -> tuple[str, str]:
+    normalized_path = (path or "/").rstrip("/") or "/"
+    if normalized_path.lower() == "/searchinpapers":
+        return "search", ""
+    author_match = _AUTHOR_PROFILE_PATH_PATTERN.fullmatch(normalized_path)
+    if author_match:
+        return "author", author_match.group("author_id")
+    return "", ""
+
+
 def canonical_search_url(value: str) -> str:
     raw = (value or "").strip()
     parsed = urlparse(raw)
     host = (parsed.hostname or "").lower()
     if parsed.scheme not in {"http", "https"} or host not in MAGIRAN_HOSTS:
-        raise ValueError("فقط لینک جست‌وجوی مگ‌ایران پذیرفته می‌شود.")
-    if parsed.path.rstrip("/").lower() != "/searchinpapers":
-        raise ValueError("لینک باید شبیه https://www.magiran.com/searchinpapers?... باشد.")
-    if not parsed.query:
+        raise ValueError("فقط لینک جست‌وجو یا پروفایل نویسندهٔ مگ‌ایران پذیرفته می‌شود.")
+
+    source_kind, _ = source_kind_and_id(parsed.path)
+    if source_kind == "search" and not parsed.query:
         raise ValueError("لینک جست‌وجوی مگ‌ایران باید عبارت یا فیلتر جست‌وجو داشته باشد.")
-    return urlunparse(("https", "www.magiran.com", "/searchinpapers", "", parsed.query, ""))
+    if not source_kind:
+        raise ValueError(
+            "لینک باید شبیه https://www.magiran.com/searchinpapers?... "
+            "یا https://www.magiran.com/author/{شناسه}/... باشد."
+        )
+
+    normalized_path = "/searchinpapers" if source_kind == "search" else parsed.path.rstrip("/")
+    return urlunparse(("https", "www.magiran.com", normalized_path, "", parsed.query, ""))
 
 
 def page_url(source_url: str, page: int) -> str:
@@ -217,17 +235,22 @@ def normalized_search_payload(
     ordered_pages = [page_results[page] for page in sorted(page_results)]
     articles = merge_articles(ordered_pages)[:MAX_ARTICLES]
     query = str(first_page.get("query") or "")
+    source_kind, source_id = source_kind_and_id(urlparse(source_url).path)
+    page_title = str(first_page.get("page_title") or "")
+    author_name_match = re.search(r"مقالات\s+رزومه\s*:\s*(.+)$", page_title)
+    author_name = author_name_match.group(1).strip() if author_name_match else ""
+    profile = {
+        "id": source_id if source_kind == "author" else query,
+        "name": author_name or ("پروفایل نویسندهٔ مگ‌ایران" if source_kind == "author" else query or "نتیجهٔ جست‌وجوی مگ‌ایران"),
+        "affil": "مقالات رزومهٔ مگ‌ایران" if source_kind == "author" else "جست‌وجوی مگ‌ایران",
+        "url": source_url,
+    }
     total_count = int(first_page.get("total_count") or len(articles))
     effective_page_count = int(page_count or first_page.get("page_count") or 1)
     discovered_count = int(discovered_page_count or first_page.get("page_count") or effective_page_count)
     return {
         "ok": True,
-        "profile": {
-            "id": query,
-            "name": query or "نتیجهٔ جست‌وجوی مگ‌ایران",
-            "affil": "جست‌وجوی مگ‌ایران",
-            "url": source_url,
-        },
+        "profile": profile,
         "source_url": source_url,
         "query": query,
         "articles": articles,
@@ -245,7 +268,7 @@ def fetch_search_pages(source_url: str, fetch_all: bool = True) -> dict[str, obj
     first_html = fetch_magiran_html(source_url)
     first_page = parse_search_html(first_html, source_url)
     if not first_page["articles"]:
-        raise ValueError("در این لینک جست‌وجوی مگ‌ایران مقاله‌ای پیدا نشد.")
+        raise ValueError("در این لینک مگ‌ایران مقاله‌ای پیدا نشد.")
 
     discovered_page_count = max(int(first_page.get("page_count") or 1), 1)
     page_count = min(discovered_page_count, MAX_PAGES)

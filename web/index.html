@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="سامانهٔ فارسی استخراج، گزینش و ساخت فایل Word از نتایج جست‌وجوی مگ‌ایران">
+  <meta name="description" content="سامانهٔ فارسی استخراج، گزینش و ساخت فایل Word از نتایج جست‌وجو و پروفایل نویسندگان مگ‌ایران">
   <title>مگ‌ایران+</title>
   <link rel="icon" href="assets/magiranplus-logo.webp?v=1" type="image/webp">
   <link rel="apple-touch-icon" href="assets/magiranplus-logo.webp?v=1">
@@ -159,7 +159,7 @@
     <section class="hero-card" aria-labelledby="hero-title">
       <div class="hero-header">
         <h1 id="hero-title">فهرست مقالات مگ‌ایران را یک‌جا دریافت و استناد کنید.</h1>
-        <p>لینک جست‌وجوی مگ‌ایران را وارد کنید؛ بعد مقاله‌ها را انتخاب و خروجی دلخواه را بسازید.</p>
+        <p>لینک جست‌وجو یا پروفایل نویسندهٔ مگ‌ایران را وارد کنید؛ بعد مقاله‌ها را انتخاب و خروجی دلخواه را بسازید.</p>
       </div>
 
       <!-- Tabs Header -->
@@ -192,9 +192,9 @@
         <form id="profile-form" novalidate>
           <div class="input-row">
             <div class="search-input-wrap">
-              <label class="sr-only" for="profile-url">نشانی جست‌وجوی مگ‌ایران</label>
+              <label class="sr-only" for="profile-url">نشانی جست‌وجو یا پروفایل نویسندهٔ مگ‌ایران</label>
               <input id="profile-url" name="profile-url" class="form-input" type="url" dir="ltr" inputmode="url"
-                autocomplete="url" placeholder="https://www.magiran.com/searchinpapers?..." required>
+                autocomplete="url" placeholder="https://www.magiran.com/searchinpapers?... یا /author/..." required>
               <button class="input-clear" id="clear-profile-url" type="button" aria-label="پاک کردن نشانی"
                 title="پاک کردن نشانی" hidden>
                 <svg class="icon" aria-hidden="true">
@@ -202,8 +202,8 @@
                 </svg>
               </button>
             </div>
-            <button class="btn-primary icon-only-button" id="extract-button" type="submit" aria-label="استخراج نتایج جست‌وجو"
-              title="استخراج نتایج جست‌وجو">
+            <button class="btn-primary icon-only-button" id="extract-button" type="submit" aria-label="استخراج از مگ‌ایران"
+              title="استخراج از مگ‌ایران">
               <svg class="icon" aria-hidden="true">
                 <use href="#icon-search"></use>
               </svg>
@@ -218,7 +218,7 @@
           <svg class="icon" aria-hidden="true">
             <use href="#icon-upload"></use>
           </svg>
-          <p class="main-text">فایل HTML صفحهٔ نتایج مگ‌ایران را اینجا بکشید و رها کنید</p>
+          <p class="main-text">فایل HTML صفحهٔ مگ‌ایران را اینجا بکشید و رها کنید</p>
           <p class="sub-text">یا کد کامل HTML را در کادر زیر بچسبانید تا در کسری از ثانیه استخراج شود</p>
         </div>
         <textarea id="raw-html" class="textarea-paste"
@@ -244,7 +244,7 @@
         <div class="bookmarklet-box">
           <div class="bookmarklet-copy">
             <strong>دکمهٔ زیر را به نوار بوک‌مارک‌های مرورگر خود (Bookmarks Bar) بکشید:</strong>
-            <p>سپس در صفحهٔ نتایج جست‌وجوی مگ‌ایران با یک کلیک روی این دکمه، نتایج مستقیماً به مگ‌ایران+ منتقل می‌شوند.</p>
+            <p>سپس در صفحهٔ مگ‌ایران با یک کلیک روی این دکمه، نتایج مستقیماً به مگ‌ایران+ منتقل می‌شوند.</p>
           </div>
           <a class="bookmarklet-btn" id="bookmarklet-link"
             href="#"

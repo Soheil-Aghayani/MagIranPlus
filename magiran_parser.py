@@ -280,6 +280,7 @@ class MagiranSearchParser(HTMLParser):
             page_count = max(page_count, inferred_page_count)
         return {
             "source_url": self.source_url,
+            "page_title": self.page_title,
             "query": parse_qs(urlparse(self.source_url).query).get("ew", [""])[0],
             "page": self.current_page,
             "total_count": total_count,

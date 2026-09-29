@@ -275,7 +275,7 @@
         message = 'استخراج تا سقف ' + toPersianDigits(state.pageCount) +
           ' صفحه انجام شد؛ سقف محافظتی برنامه اجازهٔ دریافت همهٔ صفحات را نداد.';
       } else {
-        message = 'فقط HTML همین صفحه پردازش شد؛ برای دریافت همهٔ صفحات، لینک جست‌وجو را در بخش جست‌وجو اجرا کنید.';
+        message = 'فقط HTML همین صفحه پردازش شد؛ برای دریافت کامل، لینک جست‌وجو یا پروفایل نویسنده را در بخش دریافت اجرا کنید.';
       }
       element.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>' +
         '<span>' + message + '</span>';
@@ -294,7 +294,7 @@
       seen.add(key);
       return true;
     });
-    state.profile = payload.profile || { name: payload.query || "نتیجهٔ جست‌وجو", affil: "جست‌وجوی مگ‌ایران" };
+    state.profile = payload.profile || { name: payload.query || "نتیجهٔ مگ‌ایران", affil: "مگ‌ایران" };
     state.sourceUrl = String(payload.source_url || (state.profile && state.profile.url) || "");
     state.lastSearchUrl = state.sourceUrl;
     state.totalCount = Number(payload.total_count || state.articles.length);
@@ -322,16 +322,16 @@
 
   function renderAuthorCard() {
     var profile = state.profile || {};
-    var name = String(profile.name || "نتیجهٔ جست‌وجوی مگ‌ایران");
+    var name = String(profile.name || "نتیجهٔ مگ‌ایران");
     var nameEl = document.getElementById("author-name");
     var affilEl = document.getElementById("author-affil");
     var linkEl = document.getElementById("author-link");
     var identity = document.getElementById("author-identicon");
     if (nameEl) nameEl.textContent = name;
-    if (affilEl) affilEl.textContent = profile.affil || "جست‌وجوی مگ‌ایران";
+    if (affilEl) affilEl.textContent = profile.affil || "مگ‌ایران";
     if (linkEl) {
       linkEl.href = state.sourceUrl || "https://www.magiran.com/";
-      linkEl.title = "بازکردن لینک جست‌وجو در مگ‌ایران";
+      linkEl.title = "بازکردن لینک در مگ‌ایران";
     }
     if (identity) {
       identity.setAttribute("data-jdenticon-value", state.sourceUrl || name);
@@ -902,7 +902,7 @@
     form.addEventListener("submit", async function (event) {
       event.preventDefault();
       var url = normalizeInputUrl(input.value);
-      if (!url) return showToast("لطفاً لینک جست‌وجوی مگ‌ایران را وارد کنید.");
+      if (!url) return showToast("لطفاً لینک جست‌وجو یا پروفایل نویسندهٔ مگ‌ایران را وارد کنید.");
       setLoadingState(true);
       try {
         var payload = await requestSearch(url);

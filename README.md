@@ -37,7 +37,7 @@ The interface is Persian and right-to-left, while the implementation and documen
 
 ## Features
 
-- Extract article records from a public Magiran `searchinpapers` URL.
+- Extract article records from a public Magiran `searchinpapers` URL or an `/author/{id}/...` profile URL.
 - Discover the full result count even when Magiran shows only a sliding window of page links.
 - Fetch all result pages with bounded concurrency and remove duplicate records.
 - Report failed pages explicitly instead of presenting an incomplete result as complete.

@@ -34,7 +34,7 @@ The public build tries this API first, then the optional localhost API. Localhos
 
 1. Open the public site from a phone without running a local service.
 2. `GET /api/health` returns HTTP 200 and `fetch_route` is visible.
-3. Submit a real `www.magiran.com/searchinpapers?...` URL.
+3. Submit a real `www.magiran.com/searchinpapers?...` URL or `www.magiran.com/author/{id}/...` profile URL.
 4. Confirm that `/api/parse-search` returns `complete: true` or an explicit page-status warning.
 5. Test Word and JSON downloads from Safari.
 

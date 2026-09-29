@@ -11,6 +11,16 @@ from server import app
 from test_parser import SAMPLE_HTML, SOURCE_URL
 
 
+AUTHOR_URL = (
+    "https://www.magiran.com/author/467421/"
+    "%d8%b9%d9%84%db%8c%d8%b1%d8%b6%d8%a7-%d9%be%d8%b1%d8%af%d8%a7%d8%ae%d8%aa%db%8c"
+)
+AUTHOR_PAGE_HTML = SAMPLE_HTML.replace(
+    "Magiran | جستجوی مطالب مجلات",
+    "Magiran | مقالات رزومه: علیرضا پرداختی",
+)
+
+
 ARTICLE = {
     "id": "12",
     "title": "عنوان پژوهش ۱۴۰۲ English",
@@ -46,6 +56,36 @@ class ApiTests(unittest.TestCase):
 
     def test_search_validation_rejects_other_domains(self):
         response = self.client.post("/api/parse-search", json={"url": "https://example.com/searchinpapers"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_author_profile_url_is_accepted_and_uses_the_profile_name(self):
+        with patch("server.fetch_magiran_html", return_value=AUTHOR_PAGE_HTML):
+            response = self.client.post("/api/parse-search", json={"url": AUTHOR_URL, "fetch_all": True})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["profile"]["id"], "467421")
+        self.assertEqual(payload["profile"]["name"], "علیرضا پرداختی")
+        self.assertEqual(payload["profile"]["affil"], "مقالات رزومهٔ مگ‌ایران")
+        self.assertEqual(payload["source_url"], AUTHOR_URL)
+        self.assertEqual(payload["count"], 2)
+
+    def test_pasted_author_profile_preserves_author_metadata(self):
+        response = self.client.post(
+            "/api/parse-html",
+            json={"source_url": AUTHOR_URL, "html": AUTHOR_PAGE_HTML},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["profile"]["id"], "467421")
+        self.assertEqual(payload["profile"]["name"], "علیرضا پرداختی")
+
+    def test_invalid_author_profile_path_is_rejected(self):
+        response = self.client.post(
+            "/api/parse-search",
+            json={"url": "https://www.magiran.com/author/not-an-id/example"},
+        )
         self.assertEqual(response.status_code, 400)
 
     def test_health_identifies_magiranplus_service(self):
