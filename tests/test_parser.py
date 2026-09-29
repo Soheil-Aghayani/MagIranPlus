@@ -115,6 +115,30 @@ class MagiranParserTests(unittest.TestCase):
         self.assertEqual(result["articles"][0]["title"], "عنوان بدون پیوند")
         self.assertEqual(result["articles"][0]["url"], "")
 
+    def test_keeps_english_only_author_profile_records(self):
+        html = """<html><body>
+            <li class="list-group-item paper-list en-number">
+                <div class="paper-box-content en-paper" id="en_303" data-id="303">
+                    <div class="p-title"><span class="title"><a class="mi-fulltext" href="/paper/303/english-only?lang=en">English-only paper</a></span></div>
+                    <span class="p-author p-info-part">Alireza Pardakhti, Coauthor Example</span>
+                    <span class="p-info-part mt-2">Journal Example, Volume:7 Issue: 4, Autumn 2020,</span>
+                    <span class="p-info-part">PP 1 - 9</span>
+                    <div class="paper-abs">English abstract</div>
+                </div>
+            </li>
+        </body></html>"""
+
+        result = parse_search_html(html, SOURCE_URL)
+
+        self.assertEqual(len(result["articles"]), 1)
+        article = result["articles"][0]
+        self.assertEqual(article["id"], "303")
+        self.assertEqual(article["title"], "English-only paper")
+        self.assertEqual(article["authors"], "Alireza Pardakhti, Coauthor Example")
+        self.assertEqual(article["year"], "2020")
+        self.assertEqual(article["pages"], "PP 1 - 9")
+        self.assertIn("English abstract", article["abstract"])
+
     def test_merge_articles_deduplicates_by_identifier_and_preserves_order(self):
         pages = [
             {"articles": [{"id": "1", "title": "اول"}, {"id": "2", "title": "دوم"}]},

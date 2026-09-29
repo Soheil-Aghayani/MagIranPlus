@@ -16,6 +16,7 @@ _DIGIT_TRANSLATION = str.maketrans(
 )
 _SPACE_RE = re.compile(r"\s+")
 _YEAR_RE = re.compile(r"(?<!\d)(1[0-4]\d{2})(?!\d)")
+_GREGORIAN_YEAR_RE = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
 _VENUE_RE = re.compile(
     r"^(?P<venue>.*?)(?:،\s*)?سال\s*(?P<volume>[^،(]+?)\s*"
     r"شماره\s*(?P<issue>[^،(]+?)(?:\s*\((?P<details>[^)]*)\))?\s*$"
@@ -46,7 +47,8 @@ def parse_venue(raw: str) -> dict[str, str]:
     clean = normalize_text(raw).strip(" ،,")
     match = _VENUE_RE.match(clean)
     if not match:
-        year_matches = _YEAR_RE.findall(western_digits(clean))
+        normalized = western_digits(clean)
+        year_matches = _YEAR_RE.findall(normalized) or _GREGORIAN_YEAR_RE.findall(normalized)
         return {
             "venue": clean,
             "volume": "",
@@ -65,6 +67,18 @@ def parse_venue(raw: str) -> dict[str, str]:
         "season": season,
         "year": year_matches[-1] if year_matches else "",
     }
+
+
+def _article_identifier(attributes: dict[str, str | None]) -> str:
+    """Extract Magiran's numeric record ID from Persian or English card markup."""
+
+    for value in (attributes.get("id"), attributes.get("data-id")):
+        match = re.search(r"(?:fa|en)_(\d+)", value or "")
+        if match:
+            return match.group(1)
+        if value and str(value).isdigit():
+            return str(value)
+    return ""
 
 
 def parse_pages(raw: str) -> tuple[str, str]:
@@ -106,7 +120,7 @@ class MagiranSearchParser(HTMLParser):
         classes = _classes(attrs)
         attr_map = dict(attrs)
 
-        if tag == "li" and {"paper-list", "fa-number"}.issubset(classes):
+        if tag == "li" and "paper-list" in classes and ({"fa-number", "en-number"} & classes):
             self._finish_article()
             self.current = {"id": "", "title": "", "authors": "", "authors_en": ""}
             self.article_depth = self.depth
@@ -114,17 +128,16 @@ class MagiranSearchParser(HTMLParser):
         if self.current is not None:
             if tag == "div" and "fa-paper" in classes:
                 self.in_fa_depth = self.depth
+                self.current["id"] = self.current.get("id") or _article_identifier(attr_map)
             elif tag == "div" and "en-paper" in classes:
                 self.in_en_depth = self.depth
+                self.current["id"] = self.current.get("id") or _article_identifier(attr_map)
             elif tag == "div" and "p-footer" in classes:
                 self.footer_depth = self.depth
 
             in_fa_or_en = self.in_fa_depth is not None or self.in_en_depth is not None
             if in_fa_or_en and tag == "div" and "p-info" in classes:
-                article_id = attr_map.get("id") or ""
-                match = re.search(r"(?:fa|en)_(\d+)", article_id)
-                if match and not self.current.get("id"):
-                    self.current["id"] = match.group(1)
+                self.current["id"] = self.current.get("id") or _article_identifier(attr_map)
 
             in_fa = self.in_fa_depth is not None
             in_en = self.in_en_depth is not None
@@ -141,19 +154,19 @@ class MagiranSearchParser(HTMLParser):
             elif tag == "span" and "p-author" in classes and (in_fa or in_en):
                 field = "authors_en" if in_en and not in_fa else "authors"
                 self._begin_capture(field, tag)
-            elif tag == "span" and "p-info-part" in classes and "mt-2" in classes and in_fa:
+            elif tag == "span" and "p-info-part" in classes and "mt-2" in classes and in_fa_or_en:
                 self._begin_capture("venue_raw", tag)
             elif (
                 tag == "span"
                 and "p-info-part" in classes
                 and "mt-2" not in classes
-                and in_fa
+                and in_fa_or_en
                 and self.current.get("pages_raw") is None
                 and self.footer_depth is None
                 and self.current.get("venue_raw") is not None
             ):
                 self._begin_capture("pages_raw", tag)
-            elif tag == "div" and "paper-abs" in classes and "en-number" not in classes and in_fa:
+            elif tag == "div" and "paper-abs" in classes and in_fa_or_en:
                 self._begin_capture("abstract", tag)
 
         if tag == "title":
@@ -227,7 +240,7 @@ class MagiranSearchParser(HTMLParser):
         article = self.current
         self.current = None
         article_id = normalize_text(article.get("id"))
-        title = normalize_text(article.get("title"))
+        title = normalize_text(article.get("title")) or normalize_text(article.get("title_en"))
         if not article_id or not title:
             return
 
@@ -235,7 +248,7 @@ class MagiranSearchParser(HTMLParser):
         pages_start, pages_end = parse_pages(str(article.get("pages_raw") or ""))
         footer = normalize_text(" ".join(article.get("footer_parts") or []))
         language_match = re.search(r"زبان\s*:\s*([^\s]+)", footer)
-        authors = normalize_text(article.get("authors"))
+        authors = normalize_text(article.get("authors")) or normalize_text(article.get("authors_en"))
         authors = authors.replace(" *", "").replace("*", "")
         authors_en = normalize_text(article.get("authors_en"))
         authors_en = authors_en.replace(" *", "").replace("*", "")
